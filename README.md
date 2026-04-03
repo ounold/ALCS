@@ -139,8 +139,8 @@ For a full list of all available command-line parameters and detailed implementa
 If you use this framework or any part of the code in your research or projects, please provide a proper citation to this repository:
 
 ```text
-[Your Name/Team], "ACS2 Unified CPU/GPU Framework", GitHub Repository, 2026. 
-URL: https://github.com/your-username/acs2-project
+Olgierd Unold, "ACS2 Unified CPU/GPU Framework", GitHub Repository, 2026. 
+URL: [https://github.com/your-username/acs2-project](https://github.com/ounold/ALCS)
 ```
 
 ## License
