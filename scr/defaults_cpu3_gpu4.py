@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+from typing import Any, Dict
+
+
+DEFAULT_ENVIRONMENT: Dict[str, Any] = {
+    "type": "grid_maze",
+    "name": "grid_maze",
+    "parameters": {
+        "rows": 7,
+        "cols": 7,
+        "start_pos": [0, 0],
+        "goal_pos": [0, 6],
+        "obstacles": [
+            [1, 2],
+            [1, 4],
+            [1, 5],
+            [2, 1],
+            [3, 3],
+            [3, 4],
+            [4, 1],
+            [4, 3],
+            [4, 6],
+            [5, 1],
+            [5, 4],
+            [6, 5],
+        ],
+    },
+    "reset_to_random_start": True,
+}
+
+
+DEFAULT_EXPERIMENT_VALUES: Dict[str, Any] = {
+    "n_exp": 5,
+    "seed": 42,
+    "n_steps": 100,
+    "beta": 0.05,
+    "gamma": 0.95,
+    "theta_i": 0.1,
+    "theta_r": 0.9,
+    "epsilon": 0.1,
+    "u_max": 1,
+    "steps_to_goal_threshold": 50,
+    "metric_calculation_frequency": 1,
+    "theta_ga": 100,
+    "mu": 0.3,
+    "chi": 0.8,
+    "theta_as": 50,
+    "theta_exp": 20,
+    "alp_mark_only_incorrect": True,
+    "exploit_cpu3": False,
+    "explore_episodes": 1500,
+    "explore_epsilon": 0.8,
+    "explore_beta": 0.05,
+    "explore_alp": True,
+    "explore_ga": True,
+    "explore_decay": False,
+    "exploit1_episodes": 500,
+    "exploit1_epsilon": 0.2,
+    "exploit1_beta": 0.05,
+    "exploit1_alp": True,
+    "exploit1_ga": False,
+    "exploit1_decay": False,
+    "exploit2_episodes": 500,
+    "exploit2_epsilon": 0.0,
+    "exploit2_beta": 0.05,
+    "exploit2_alp": False,
+    "exploit2_ga": False,
+    "exploit2_decay": False,
+}
