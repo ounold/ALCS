@@ -1,0 +1,206 @@
+import random
+import copy
+from typing import List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .acs2CPU2 import ACS2
+    from .classifierCPU2 import Classifier
+    from .confCPU2 import ACS2Configuration
+
+
+def apply_ga(agent: 'ACS2', action_set: List['Classifier']):
+    """
+    Applies the genetic algorithm to the action set.
+    """
+    total_num = sum(cl.num for cl in action_set)
+    if total_num > 0:
+        avg_t = sum(cl.t_ga * cl.num for cl in action_set) / total_num
+        if agent.time - avg_t > agent.cfg.theta_ga and len(action_set) >= 2:
+            ga_evolve(agent, action_set)
+    
+    while sum(cl.num for cl in action_set) > agent.cfg.theta_as:
+        delete_victim(agent, action_set)
+
+
+def ga_evolve(agent: 'ACS2', aset: List['Classifier']):
+    """
+    Evolves the action set using GA operators.
+    """
+    p1 = select_offspring(aset)
+    p2 = select_offspring(aset)
+    c1 = p1.copy()
+    c2 = p2.copy()
+    
+    c1.num = c2.num = 1
+    c1.exp = c2.exp = 0
+    c1.t_ga = agent.time
+    c1.parents = (p1.id, p2.id)
+    c2.parents = (p1.id, p2.id)
+    c1.origin_source = "ga" # Set origin source
+    c2.origin_source = "ga" # Set origin source
+    c1.creation_episode = agent.curr_ep_idx # Set creation episode
+    c2.creation_episode = agent.curr_ep_idx # Set creation episode
+
+    if random.random() < agent.cfg.chi:
+        crossover(c1, c2)
+        
+    mutate(c1, agent.cfg)
+    mutate(c2, agent.cfg)
+    
+    c1.q = c2.q = 0.5
+    
+    # Subsumption is handled within add_to_population
+    agent.add_to_population(c1)
+    agent.add_to_population(c2)
+
+
+import numpy as np
+
+def select_offspring(aset: List['Classifier']) -> 'Classifier':
+    """
+    Selects a classifier from the action set for reproduction using NumPy.
+    """
+    qualities = np.array([cl.q for cl in aset])
+    weights = qualities ** 3
+    total_weight = np.sum(weights)
+    
+    if total_weight == 0:
+        return random.choice(aset)
+    
+    probabilities = weights / total_weight
+    # select a single index based on probabilities
+    idx = np.random.choice(len(aset), p=probabilities)
+    return aset[idx]
+
+
+def mutate(cl: 'Classifier', cfg: 'ACS2Configuration'):
+    """
+    Mutates the condition of a classifier using bitwise operations.
+    Covers both generalization (to #) and specification (to specific value).
+    """
+    changed = False
+    for i in range(cfg.l_len):
+        shift = i * 8
+        if random.random() < cfg.mu:
+            # If the bit is currently specified (not a wildcard)
+            if (cl.wildcard_mask >> shift) & 0xFF:
+                # Generalize: Change to wildcard
+                cl.wildcard_mask &= ~(0xFF << shift)
+                cl.condition_bits &= ~(0xFF << shift)
+                changed = True
+    
+    # In bitwise ACS2, we mainly use mutation for generalization in GA.
+    # Specification usually happens during ALP or Covering.
+
+
+def crossover(c1: 'Classifier', c2: 'Classifier'):
+    """
+    Performs bitwise crossover between two classifiers.
+    Swaps bit segments from index pt.
+    """
+    pt = random.randint(0, c1.cfg.l_len) # 0 to l_len inclusive
+    shift = pt * 8
+    mask = (1 << shift) - 1
+    
+    # Bits before pt stay, bits after pt are swapped
+    # Mask covers bits [0, shift-1]
+    
+    # Swap condition_bits
+    c1_bits, c2_bits = c1.condition_bits, c2.condition_bits
+    c1.condition_bits = (c1_bits & mask) | (c2_bits & ~mask)
+    c2.condition_bits = (c2_bits & mask) | (c1_bits & ~mask)
+    
+    # Swap wildcard_mask
+    c1_wild, c2_wild = c1.wildcard_mask, c2.wildcard_mask
+    c1.wildcard_mask = (c1_wild & mask) | (c2_wild & ~mask)
+    c2.wildcard_mask = (c2_wild & mask) | (c1_wild & ~mask)
+
+
+def delete_victim(agent: 'ACS2', aset: List['Classifier']):
+    """
+    Deletes a classifier from the population.
+    """
+    victim = min(aset, key=lambda cl: cl.q)
+    if victim.num > 1:
+        victim.num -= 1
+    else:
+        agent.remove_from_population(victim)
+        if victim in aset:
+            aset.remove(victim)
+
+
+import numba
+
+@numba.njit
+def fast_subsume(gen_A, gen_bits, gen_wild, gen_exp, gen_q, 
+                 spec_A, spec_bits, spec_wild, 
+                 theta_exp, theta_r):
+    """
+    Core bitwise subsumption logic.
+    Returns True if 'gen' can subsume 'spec'.
+    """
+    # 1. Action must be identical
+    if gen_A != spec_A:
+        return False
+    
+    # 2. Experience and Quality thresholds for the general classifier
+    if gen_exp <= theta_exp or gen_q <= theta_r:
+        return False
+
+    # 3. Consistency: 'gen' must match 'spec''s condition bits
+    if (spec_bits & gen_wild) != gen_bits:
+        return False
+
+    # 4. Generality: 'gen' must be strictly more general or equal
+    # If gen has a bit specified (1 in gen_wild), spec MUST have it specified too.
+    if (gen_wild & spec_wild) != gen_wild:
+        return False
+        
+    # Strictly more general? spec_wild must have more bits set than gen_wild
+    if gen_wild == spec_wild:
+        return False
+
+    return True
+
+
+def does_subsume(gen: 'Classifier', spec: 'Classifier', cfg: 'ACS2Configuration') -> bool:
+    """
+    Checks if a general classifier subsumes a specific one.
+    Wraps the Numba-accelerated fast_subsume function.
+    """
+    # Effect check (cannot be easily passed to Numba if it's not simple types)
+    if gen.effect_bits != spec.effect_bits or gen.effect_wildcard_mask != spec.effect_wildcard_mask:
+        return False
+        
+    # Mark set check (Numba doesn't handle sets well, keep in Python wrapper)
+    if any(len(m) > 0 for m in gen.M):
+        return False
+
+    return fast_subsume(gen.A, gen.condition_bits, gen.wildcard_mask, gen.exp, gen.q,
+                        spec.A, spec.condition_bits, spec.wildcard_mask,
+                        cfg.theta_exp, cfg.theta_r)
+
+
+def generate_covering_classifiers(agent: 'ACS2', state: List[str]) -> List['Classifier']:
+    """
+    Generates covering classifiers for a given state.
+    """
+    action = random.randint(0, agent.cfg.num_actions - 1)
+    return [create_covering_classifier(agent.cfg, state, action, agent.time, agent.curr_ep_idx)]
+
+
+def create_covering_classifier(cfg: 'ACS2Configuration', state: List[str], action: int, time: int, episode: int) -> 'Classifier':
+    """
+    Creates a single covering classifier.
+    """
+    from .classifierCPU2 import Classifier
+    cond = ['#' for _ in range(cfg.l_len)]
+    idxs = random.sample(range(cfg.l_len), min(cfg.u_max, cfg.l_len))
+    for i in idxs:
+        cond[i] = state[i]
+        
+    eff = list(state) if cfg.do_simple_mode else ['#' for _ in range(cfg.l_len)]
+    
+    cl = Classifier(cond, action, eff, cfg, time, origin_source="covering", creation_episode=episode)
+    cl.q = cl.r = 0.5
+    return cl
