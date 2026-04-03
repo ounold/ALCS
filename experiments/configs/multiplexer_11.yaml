@@ -1,0 +1,46 @@
+n_exp: 5
+n_steps: 1
+beta: 0.05
+gamma: 0.95
+theta_i: 0.1
+theta_r: 0.6
+epsilon: 0.1
+u_max: 1
+steps_to_goal_threshold: 50
+metric_calculation_frequency: 1
+alp_mark_only_incorrect: true
+
+environment:
+  type: multiplexer
+  name: mux_11
+  parameters:
+    address_bits: 3
+    sampling: random
+  reset_to_random_start: false
+
+theta_ga: 100
+mu: 0.3
+chi: 0.8
+theta_as: 50
+theta_exp: 10
+
+explore_episodes: 10500
+explore_epsilon: 0.8
+explore_beta: 0.05
+explore_alp: true
+explore_ga: true
+explore_decay: false
+
+exploit1_episodes: 500
+exploit1_epsilon: 0.2
+exploit1_beta: 0.05
+exploit1_alp: true
+exploit1_ga: true
+exploit1_decay: false
+
+exploit2_episodes: 500
+exploit2_epsilon: 0.0
+exploit2_beta: 0.05
+exploit2_alp: false
+exploit2_ga: false
+exploit2_decay: false

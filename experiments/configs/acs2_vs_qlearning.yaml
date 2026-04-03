@@ -1,0 +1,42 @@
+experiment_name: ACS2_vs_QLearning
+repetitions: 5
+total_episodes: 100
+environment:
+  name: GridEnvironment
+  params:
+    rows: 7
+    cols: 7
+    start_pos: [0, 0]
+    goal_pos: [0, 6]
+    obstacles:
+      - [1, 2]
+      - [1, 4]
+      - [1, 5]
+      - [2, 1]
+      - [3, 3]
+      - [3, 4]
+      - [4, 1]
+      - [4, 3]
+      - [4, 6]
+      - [5, 1]
+      - [5, 4]
+      - [6, 5]
+
+models:
+  - model_name: ACS2
+    path: src.models.acs2.acs2.ACS2
+    config_path: src.models.acs2.conf.ACS2Configuration
+    params:
+      beta: 0.1
+      gamma: 0.95
+      epsilon: 0.2
+      do_ga: True
+      do_alp: True
+
+  - model_name: Q-learning
+    path: src.models.q_learning.q_learning.QLearning
+    config_path: src.models.q_learning.conf.QLearningConfiguration
+    params:
+      learning_rate: 0.1
+      discount_factor: 0.9
+      epsilon: 0.2

@@ -1,0 +1,43 @@
+n_exp: 10
+n_steps: 100
+beta: 0.05
+gamma: 0.95
+theta_i: 0.1
+theta_r: 0.9
+epsilon: 0.1
+u_max: 1
+steps_to_goal_threshold: 50
+metric_calculation_frequency: 1
+
+environment:
+  type: grid_maze
+  name: Woods1
+  parameters: {}
+  reset_to_random_start: true
+
+theta_ga: 100
+mu: 0.3
+chi: 0.8
+theta_as: 50
+theta_exp: 20
+
+explore_episodes: 50
+explore_epsilon: 0.8
+explore_beta: 0.05
+explore_alp: true
+explore_ga: true
+explore_decay: false
+
+exploit1_episodes: 50
+exploit1_epsilon: 0.2
+exploit1_beta: 0.05
+exploit1_alp: true
+exploit1_ga: false
+exploit1_decay: false
+
+exploit2_episodes: 50
+exploit2_epsilon: 0.0
+exploit2_beta: 0.05
+exploit2_alp: false
+exploit2_ga: false
+exploit2_decay: false

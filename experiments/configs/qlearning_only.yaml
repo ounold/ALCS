@@ -1,0 +1,32 @@
+experiment_name: QLearning_Only
+repetitions: 1
+total_episodes: 500
+environment:
+  name: GridEnvironment
+  params:
+    rows: 7
+    cols: 7
+    start_pos: [0, 0]
+    goal_pos: [0, 6]
+    obstacles:
+      - [1, 2]
+      - [1, 4]
+      - [1, 5]
+      - [2, 1]
+      - [3, 3]
+      - [3, 4]
+      - [4, 1]
+      - [4, 3]
+      - [4, 6]
+      - [5, 1]
+      - [5, 4]
+      - [6, 5]
+
+models:
+  - model_name: Q-learning
+    path: src.models.q_learning.q_learning.QLearning
+    config_path: src.models.q_learning.conf.QLearningConfiguration
+    params:
+      learning_rate: 0.1
+      discount_factor: 0.9
+      epsilon: 0.01

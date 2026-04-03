@@ -1,0 +1,26 @@
+experiment_name: ACS2_vs_QLearning_Maze5
+repetitions: 10
+total_episodes: 1500
+environment:
+  name: GridEnvironment
+  params:
+    map_file: maze-5.txt
+
+models:
+  - model_name: ACS2
+    path: src.models.acs2.acs2.ACS2
+    config_path: src.models.acs2.conf.ACS2Configuration
+    params:
+      beta: 0.1
+      gamma: 0.95
+      epsilon: 0.8 # High epsilon for exploration in explore mode
+      do_ga: True
+      do_alp: True
+
+  - model_name: Q-learning
+    path: src.models.q_learning.q_learning.QLearning
+    config_path: src.models.q_learning.conf.QLearningConfiguration
+    params:
+      learning_rate: 0.1
+      discount_factor: 0.9
+      epsilon: 0.8 # High epsilon for exploration in explore mode

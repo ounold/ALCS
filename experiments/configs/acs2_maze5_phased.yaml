@@ -1,0 +1,35 @@
+experiment_name: ACS2_Maze5_Phased
+repetitions: 10
+environment:
+  name: GridEnvironment
+  params:
+    map_file: maze-5.txt
+
+models:
+  - model_name: ACS2
+    path: src.models.acs2.acs2.ACS2
+    config_path: src.models.acs2.conf.ACS2Configuration
+    params:
+      # Base parameters (can be overridden by phases)
+      beta: 0.1
+      gamma: 0.95
+
+phases:
+  - name: explore
+    episodes: 1500
+    params:
+      epsilon: 0.8
+      do_ga: True
+      do_alp: True
+  - name: exploit1
+    episodes: 500
+    params:
+      epsilon: 0.2
+      do_ga: False
+      do_alp: True
+  - name: exploit2
+    episodes: 500
+    params:
+      epsilon: 0.0
+      do_ga: False
+      do_alp: False

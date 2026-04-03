@@ -1,0 +1,16 @@
+experiment_name: QLearning_Maze5
+repetitions: 10
+total_episodes: 2500
+environment:
+  name: GridEnvironment
+  params:
+    map_file: maze-5.txt
+
+models:
+  - model_name: Q-learning
+    path: src.models.q_learning.q_learning.QLearning
+    config_path: src.models.q_learning.conf.QLearningConfiguration
+    params:
+      learning_rate: 0.1
+      discount_factor: 0.9
+      epsilon: 0.8
