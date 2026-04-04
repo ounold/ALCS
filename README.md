@@ -1,4 +1,4 @@
-A high-performance ACS2 based on vectorization and GPU
+# A high-performance ACS2 based on vectorization and GPU
 
 ## Overview
 
