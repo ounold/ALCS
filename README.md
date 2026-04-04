@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains the current ACS2-based implementation of the **Anticipatory Learning Classifier System** library available at:
+This repository contains the current ACS2-based and CPU/GPU driven implementation of the **Anticipatory Learning Classifier System** library available at:
 
 [https://github.com/ounold/ALCS](https://github.com/ounold/ALCS)
 
