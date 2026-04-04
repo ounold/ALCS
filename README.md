@@ -340,7 +340,7 @@ URL: https://github.com/ounold/ALCS
 
 ## Contact
 
-Please feel free to contact me at: [olgierd.unold@pwr.edu.pl](olgierd.unold@pwr.edu.pl)
+Please feel free to contact me at: [olgierd.unold@pwr.edu.pl](mailto:olgierd.unold@pwr.edu.pl)
 
 ## License
 
