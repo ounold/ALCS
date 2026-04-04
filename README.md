@@ -338,6 +338,10 @@ Olgierd Unold, "ALCS / ACS2 Library", GitHub repository, 2026.
 URL: https://github.com/ounold/ALCS
 ```
 
+## Contact
+
+Please feel free to contact me at: [olgierd.unold@pwr.edu.pl](olgierd.unold@pwr.edu.pl)
+
 ## License
 
 This project is licensed under the MIT License. 
