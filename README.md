@@ -6,7 +6,7 @@ This repository contains the current ACS2-based implementation of the **Anticipa
 
 [https://github.com/ounold/ALCS](https://github.com/ounold/ALCS)
 
-The current implementation was developed in an AI-assisted programming workflow, with iterative human supervision, validation, and refinement of both the research code and the experimental tooling.
+The current implementation was developed in an **AI-assisted programming** workflow, with iterative human supervision, validation, and refinement of both the research code and the experimental tooling.
 
 The codebase provides a unified entry point for running ACS2 experiments across:
 
