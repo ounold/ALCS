@@ -1,4 +1,4 @@
-# ALCS / ACS2 Library
+A high-performance ACS2 based on vectorization and GPU
 
 ## Overview
 
