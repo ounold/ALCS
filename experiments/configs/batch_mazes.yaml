@@ -37,3 +37,9 @@ environment:
   name: Woods1
   parameters: {}
   reset_to_random_start: true
+
+modes:
+  - cpu_single
+  - cpu_mp
+  - gpu_seq
+  - gpu_seq_cpu
