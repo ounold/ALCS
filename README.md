@@ -397,7 +397,8 @@ ALCS/
 If you use this library, please cite the repository:
 
 ```text
-Olgierd Unold. 2026. A high-performance ACS2 based on vectorization and GPU. In Proceedings of the Genetic and Evolutionary Computation Conference Companion. ACM.
+Olgierd Unold. 2026. A high-performance ACS2 based on vectorization and GPU. 
+In Proceedings of the Genetic and Evolutionary Computation Conference Companion. ACM.
 
 URL: https://github.com/ounold/ALCS
 ```
