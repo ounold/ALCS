@@ -13,6 +13,7 @@ It is important to distinguish between **how** the experiments are distributed (
 These flags control the **architectural backend**. They decide which strategy manages the experiment phases:
 
 *   **`gpu`**: Uses **Batched Execution**. It takes all `n_exp` experiments and packs them into huge tensors. All experiments are updated simultaneously in a single loop. Highly efficient for large populations and simple logic.
+*   **`gpu_seq`**: Uses **Sequential Independent GPU Execution**. It performs `n_exp` separate GPU runs with `n_exp=1` internally and different seeds. This is slower than batched `gpu`, but more appropriate when you want statistically independent repetitions for significance tests or confidence intervals.
 *   **`cpu_mp`**: Uses **Parallel Execution**. It starts multiple independent Python processes (one per CPU core). Each process runs one experiment at a time using standard object-oriented logic. Best for complex logic that is hard to vectorize.
 *   **`cpu_single`**: Uses the same CPU object-oriented logic in a single process. Best for debugging and deterministic step-by-step inspection.
 *   *Note:* `acs2.py` can now run fully on one backend or use a hybrid handoff between backends.
@@ -31,6 +32,8 @@ This flag is specific to the **GPU algorithm mode**. Once you choose the `gpu` b
 | :--- | :--- | :--- |
 | **`gpu`** | `cuda` | Tensor-batched math on Graphics Card (Fastest for Discovery). |
 | **`gpu`** | `cpu` | Tensor-batched math on CPU (Testing GPU logic without a card). |
+| **`gpu_seq`** | `cuda` | Independently seeded sequential GPU runs (Best GPU mode for statistical comparison). |
+| **`gpu_seq`** | `cpu` | Sequential tensor-based runs on CPU (mostly for debugging/validation). |
 | **`cpu_mp`** | (Ignored) | Multi-core parallel processes (Fastest for CPU-based logic). |
 | **`cpu_single`**| (Ignored) | One process, one core (Best for debugging). |
 
@@ -41,6 +44,7 @@ This flag is specific to the **GPU algorithm mode**. Once you choose the `gpu` b
 | `--explore_mode cpu_single --exploit_mode cpu_single` | Full single-core CPU run. |
 | `--explore_mode cpu_mp --exploit_mode cpu_mp` | Full multiprocessing CPU run. |
 | `--explore_mode gpu --exploit_mode gpu` | Full GPU run across all phases. |
+| `--explore_mode gpu_seq --exploit_mode gpu_seq` | Full sequential independent GPU run across all phases. |
 | `--explore_mode gpu --exploit_mode cpu_mp` | Hybrid run: GPU explore, CPU multiprocessing exploit. |
 | `--explore_mode <mode>` | If `--exploit_mode` is omitted, `exploit1` and `exploit2` default to `cpu_single`. |
 
@@ -103,8 +107,8 @@ If not specified in a YAML config or via CLI, the following defaults are used:
 | **exploit2** | 500 | 0.0 | 0.05 | OFF | OFF | OFF |
 
 ### Execution Settings
-- `--explore_mode <cpu_single|cpu_mp|gpu>`: Backend used for the `explore` phase.
-- `--exploit_mode <cpu_single|cpu_mp|gpu>`: Backend used for `exploit1` and `exploit2`. Default: `cpu_single`.
+- `--explore_mode <cpu_single|cpu_mp|gpu|gpu_seq>`: Backend used for the `explore` phase.
+- `--exploit_mode <cpu_single|cpu_mp|gpu|gpu_seq>`: Backend used for `exploit1` and `exploit2`. Default: `cpu_single`.
 - `--device <auto|cpu|cuda>`: Physical device used by the GPU backend.
 
 ### General Experiment Settings
@@ -235,7 +239,8 @@ By default, `acs2.py` generates a comprehensive dashboard (`_all.png`) when no s
 4. **Default Workflow:** If you set only `--explore_mode`, the two exploit phases run in `cpu_single`.
 5. **Hybrid Workflow:** Use `acs2.py --explore_mode gpu --exploit_mode cpu_mp` when you want fast tensorized discovery and CPU-based exploit evaluation.
 6. **Full GPU Workflow:** Use `acs2.py --explore_mode gpu --exploit_mode gpu --device cuda` when you want every phase to stay on the GPU backend.
-7. **No-Subsumption Ablation:** Use `acs2.py --no_subsumption ...` when you want a direct CPU/GPU comparison without subsumption overhead.
+7. **Independent GPU Statistics:** Use `acs2.py --explore_mode gpu_seq --exploit_mode gpu_seq --device cuda` when you need GPU repetitions that are independently seeded for statistical analysis.
+8. **No-Subsumption Ablation:** Use `acs2.py --no_subsumption ...` when you want a direct CPU/GPU comparison without subsumption overhead.
 
 ## Maze Benchmark Helper
 
@@ -243,5 +248,39 @@ The batch benchmark script supports the same subsumption toggle:
 
 - `python run_maze_benchmarks.py`
 - `python run_maze_benchmarks.py --no_subsumption`
+
+It also supports both GPU backends and explicit hardware-forced variants:
+
+- `python run_maze_benchmarks.py --mode gpu`
+- `python run_maze_benchmarks.py --mode gpu_seq`
+- `python run_maze_benchmarks.py --mode gpu_cpu`
+- `python run_maze_benchmarks.py --mode gpu_seq_cpu`
+- `python run_maze_benchmarks.py --mode gpu_cuda`
+- `python run_maze_benchmarks.py --mode gpu_seq_cuda`
+
+Recommended interpretation:
+
+- `gpu`: use the device from the YAML/config
+- `gpu_seq`: use the device from the YAML/config, but with independently seeded sequential repetitions
+- `gpu_cpu`: force the tensorized PyTorch backend onto CPU
+- `gpu_seq_cpu`: force the independently seeded tensorized backend onto CPU
+- `gpu_cuda`: force the batched tensorized backend onto CUDA
+- `gpu_seq_cuda`: force the independently seeded tensorized backend onto CUDA
+
+If you want to answer whether PyTorch-on-CPU is competitive with the multiprocessing CPU backend, the most informative comparison is usually:
+
+- `cpu_single`
+- `cpu_mp`
+- `gpu_cpu`
+- `gpu_seq_cpu`
+
+The benchmark CSV now also includes population measures averaged over the `exploit2` phase:
+
+- `micro_pop_exploit2_avg`
+- `macro_pop_exploit2_avg`
+- `micro_pop_rel_exploit2_avg`
+- `macro_pop_rel_exploit2_avg`
+
+These columns are useful when relating runtime to rule-population size, because LCS computational cost often scales with the maintained macro- and micro-population. The `rel` variants restrict the count to reliable classifiers only.
 
 When `--no_subsumption` is used, the output CSV includes a `no_subsumption` column so the benchmark setting is recorded explicitly.

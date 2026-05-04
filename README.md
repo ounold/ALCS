@@ -12,7 +12,8 @@ The codebase provides a unified entry point for running ACS2 experiments across:
 
 - `cpu_single` for sequential CPU execution,
 - `cpu_mp` for multiprocessing CPU execution,
-- `gpu` for tensorized GPU execution.
+- `gpu` for tensorized batched GPU execution,
+- `gpu_seq` for independently seeded sequential GPU execution.
 
 The main executable is [`acs2.py`](acs2.py). It supports full single-backend runs as well as mixed backend schedules across the three ACS2 phases:
 
@@ -27,7 +28,7 @@ For a full parameter reference, see [parameter_guide.md](parameter_guide.md).
 ## Main Features
 
 - Unified ACS2 runner through `acs2.py`
-- Three execution backends: `cpu_single`, `cpu_mp`, `gpu`
+- Four execution backends: `cpu_single`, `cpu_mp`, `gpu`, `gpu_seq`
 - Mixed-mode execution through `UniversalRunner`
 - Dashboard generation after each run
 - Support for maze, multiplexer, binary-classification, and Gymnasium environments
@@ -86,6 +87,14 @@ pip install torch gymnasium numpy pandas matplotlib pyyaml
 .\.venv\Scripts\python.exe acs2.py --config experiments/configs/batch_mazes.yaml --explore_mode gpu --exploit_mode gpu --device cuda
 ```
 
+### Sequential independent GPU run
+
+Use this mode when you want statistically cleaner repeated GPU runs with one independently seeded GPU execution per experiment:
+
+```powershell
+.\.venv\Scripts\python.exe acs2.py --config experiments/configs/batch_mazes.yaml --explore_mode gpu_seq --exploit_mode gpu_seq --device cuda
+```
+
 ### Hybrid run
 
 GPU in `explore`, CPU in both exploit phases:
@@ -114,7 +123,7 @@ The main script:
 ### General command pattern
 
 ```powershell
-.\.venv\Scripts\python.exe acs2.py --config <config.yaml> --explore_mode <cpu_single|cpu_mp|gpu> --exploit_mode <cpu_single|cpu_mp|gpu> --device <cpu|cuda|auto>
+.\.venv\Scripts\python.exe acs2.py --config <config.yaml> --explore_mode <cpu_single|cpu_mp|gpu|gpu_seq> --exploit_mode <cpu_single|cpu_mp|gpu|gpu_seq> --device <cpu|cuda|auto>
 ```
 
 If `--exploit_mode` is omitted, `acs2.py` defaults to `cpu_single` for `exploit1` and `exploit2`.
@@ -141,6 +150,12 @@ Example: full GPU maze run
 
 ```powershell
 .\.venv\Scripts\python.exe acs2.py --config experiments/configs/batch_mazes.yaml --environment_type grid_maze --environment_name Cassandra4x4 --explore_mode gpu --exploit_mode gpu --device cuda --no_subsumption true
+```
+
+Example: statistically independent GPU maze run
+
+```powershell
+.\.venv\Scripts\python.exe acs2.py --config experiments/configs/batch_mazes.yaml --environment_type grid_maze --environment_name Cassandra4x4 --explore_mode gpu_seq --exploit_mode gpu_seq --device cuda --no_subsumption true
 ```
 
 ## 2. Multiplexer environments
@@ -196,6 +211,11 @@ The helper script [`run_maze_benchmarks.py`](run_maze_benchmarks.py) runs the ma
   - `CPU Single`
   - `CPU MP`
   - `GPU`
+  - `GPU Seq`
+  - `GPU (PyTorch CPU)`
+  - `GPU Seq (PyTorch CPU)`
+  - `GPU CUDA`
+  - `GPU Seq CUDA`
 
 It stores a CSV with:
 
@@ -204,7 +224,17 @@ It stores a CSV with:
 - `std_exp_time_s`
 - `exploit_avg_steps`
 - `exploit_avg_steps_std`
+- `micro_pop_exploit2_avg`
+- `macro_pop_exploit2_avg`
+- `micro_pop_rel_exploit2_avg`
+- `macro_pop_rel_exploit2_avg`
 - GPU timing breakdown columns
+
+The population columns are averaged over the `exploit2` phase so they align with the exploit-step quality metric. Here:
+
+- `micro_pop_exploit2_avg` counts all classifiers with numerosity,
+- `macro_pop_exploit2_avg` counts unique classifiers,
+- `*_rel_*` restricts the population to reliable classifiers only.
 
 ### Run the full benchmark from YAML
 
@@ -224,6 +254,37 @@ It stores a CSV with:
 .\.venv\Scripts\python.exe run_maze_benchmarks.py --config experiments/configs/batch_mazes.yaml --no_subsumption --output reports\maze_benchmarks_no_subsumption.csv
 ```
 
+### Run only the statistically independent GPU mode
+
+```powershell
+.\.venv\Scripts\python.exe run_maze_benchmarks.py --config experiments/configs/batch_mazes.yaml --mode gpu_seq --output reports\maze_benchmarks_gpu_seq.csv
+```
+
+### Compare PyTorch-on-CPU against CPU backends
+
+This is the most direct way to answer whether the tensorized PyTorch implementation is competitive on CPU alone:
+
+```yaml
+modes:
+  - cpu_single
+  - cpu_mp
+  - gpu_cpu
+  - gpu_seq_cpu
+```
+
+Then run:
+
+```powershell
+.\.venv\Scripts\python.exe run_maze_benchmarks.py --config experiments/configs/my_cpu_comparison.yaml --output reports\maze_benchmarks_torch_cpu_vs_cpu.csv
+```
+
+Mode meaning in the benchmark script:
+
+- `gpu_cpu`: batched tensorized backend forced to `device=cpu`
+- `gpu_seq_cpu`: independently seeded sequential tensorized backend forced to `device=cpu`
+- `gpu_cuda`: batched tensorized backend forced to `device=cuda`
+- `gpu_seq_cuda`: independently seeded sequential tensorized backend forced to `device=cuda`
+
 ### Restrict modes and mazes from YAML
 
 `run_maze_benchmarks.py` also supports YAML keys:
@@ -241,6 +302,8 @@ mazes:
 modes:
   - cpu_single
   - cpu_mp
+  - gpu_seq_cpu
+  - gpu_seq_cuda
 ```
 
 Then run:
