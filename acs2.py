@@ -5,8 +5,9 @@ from datetime import datetime
 from src.configGPU4 import build_arg_parserGPU4, experiment_config_from_argsGPU4, load_yaml_defaultsGPU4
 from src.universal_runner import UniversalRunner
 from src.visualizationCPU3 import create_dashboardCPU3, create_loaded_dashboardCPU3
-from src.visualizationGPU4 import create_dashboardGPU4
+from src.visualizationGPU4 import create_dashboardGPU4, create_loaded_dashboardGPU4
 from src.data_handlerCPU3 import export_dashboard_dataCPU3, import_dashboard_dataCPU3
+from src.data_handlerGPU4 import export_dashboard_dataGPU4, import_dashboard_dataGPU4
 from src.experiment_runnerCPU3 import calculate_optimal_metricsCPU3, create_environmentCPU3
 from environment.runtime_gpu4 import EnvironmentGPU4
 
@@ -20,9 +21,9 @@ def main() -> None:
     parser = build_arg_parserGPU4(defaults)
     
     execution_group = parser.add_argument_group("Execution Modes")
-    execution_group.add_argument("--explore_mode", type=str, choices=["cpu_single", "cpu_mp", "gpu"], default="gpu",
+    execution_group.add_argument("--explore_mode", type=str, choices=["cpu_single", "cpu_mp", "gpu", "gpu_seq"], default="gpu",
                                  help="Execution backend for the explore phase.")
-    execution_group.add_argument("--exploit_mode", type=str, choices=["cpu_single", "cpu_mp", "gpu"], default="cpu_single",
+    execution_group.add_argument("--exploit_mode", type=str, choices=["cpu_single", "cpu_mp", "gpu", "gpu_seq"], default="cpu_single",
                                  help="Execution backend for the exploit phases.")
     
     args = parser.parse_args()
@@ -31,30 +32,54 @@ def main() -> None:
         print(f"--- Loading dashboard data for timestamp: {args.load_dashboard_data} ---")
         loaded_stats, loaded_metadata = import_dashboard_dataCPU3(args.load_dashboard_data)
         if not loaded_metadata:
+            loaded_stats, loaded_metadata = import_dashboard_dataGPU4(args.load_dashboard_data)
+        if not loaded_metadata:
             raise FileNotFoundError(
                 f"No saved dashboard data found for timestamp '{args.load_dashboard_data}'."
             )
 
-        create_loaded_dashboardCPU3(
-            loaded_stats=loaded_stats,
-            optimal_avg_steps=loaded_metadata.get("optimal_avg_steps", 0.0),
-            params_phases=loaded_metadata.get("params_phases", {}),
-            n_exp=loaded_metadata.get("n_exp", 0),
-            n_steps=loaded_metadata.get("n_steps", 0),
-            environment_metadata=loaded_metadata.get("environment", {}),
-            plot_steps=args.plot_steps,
-            plot_population=args.plot_population,
-            plot_knowledge=args.plot_knowledge,
-            plot_reward_quality=args.plot_reward_quality,
-            plot_policy_map=args.plot_policy_map,
-            plot_top_rules=args.plot_top_rules,
-            plot_origin_distribution=args.plot_origin_distribution,
-            plot_origin_distribution_abs=args.plot_origin_distribution_abs,
-            plot_creation_dist_key=args.plot_creation_dist,
-            plot_all_dashboards=args.plot_all_dashboards,
-            timestamp=args.load_dashboard_data,
-            title_prefix=loaded_metadata.get("title_prefix", ""),
-        )
+        if loaded_metadata.get("implementation") == "GPU4":
+            create_loaded_dashboardGPU4(
+                loaded_stats=loaded_stats,
+                optimal_avg_steps=loaded_metadata.get("optimal_avg_steps", 0.0),
+                params_phases=loaded_metadata.get("params_phases", {}),
+                n_exp=loaded_metadata.get("n_exp", 0),
+                n_steps=loaded_metadata.get("n_steps", 0),
+                environment_metadata=loaded_metadata.get("environment", {}),
+                plot_steps=args.plot_steps,
+                plot_population=args.plot_population,
+                plot_knowledge=args.plot_knowledge,
+                plot_reward_quality=args.plot_reward_quality,
+                plot_policy_map=args.plot_policy_map,
+                plot_top_rules=args.plot_top_rules,
+                plot_origin_distribution=args.plot_origin_distribution,
+                plot_origin_distribution_abs=args.plot_origin_distribution_abs,
+                plot_creation_dist_key=args.plot_creation_dist,
+                plot_all_dashboards=args.plot_all_dashboards,
+                timestamp=args.load_dashboard_data,
+                title_prefix=loaded_metadata.get("title_prefix", ""),
+            )
+        else:
+            create_loaded_dashboardCPU3(
+                loaded_stats=loaded_stats,
+                optimal_avg_steps=loaded_metadata.get("optimal_avg_steps", 0.0),
+                params_phases=loaded_metadata.get("params_phases", {}),
+                n_exp=loaded_metadata.get("n_exp", 0),
+                n_steps=loaded_metadata.get("n_steps", 0),
+                environment_metadata=loaded_metadata.get("environment", {}),
+                plot_steps=args.plot_steps,
+                plot_population=args.plot_population,
+                plot_knowledge=args.plot_knowledge,
+                plot_reward_quality=args.plot_reward_quality,
+                plot_policy_map=args.plot_policy_map,
+                plot_top_rules=args.plot_top_rules,
+                plot_origin_distribution=args.plot_origin_distribution,
+                plot_origin_distribution_abs=args.plot_origin_distribution_abs,
+                plot_creation_dist_key=args.plot_creation_dist,
+                plot_all_dashboards=args.plot_all_dashboards,
+                timestamp=args.load_dashboard_data,
+                title_prefix=loaded_metadata.get("title_prefix", ""),
+            )
         return
 
     # 3. Build Configuration
@@ -94,6 +119,15 @@ def main() -> None:
             experiment_config.n_exp,
             experiment_config.n_steps,
             final_summary,
+            plot_steps=args.plot_steps,
+            plot_population=args.plot_population,
+            plot_knowledge=args.plot_knowledge,
+            plot_reward_quality=args.plot_reward_quality,
+            plot_policy_map=args.plot_policy_map,
+            plot_top_rules=args.plot_top_rules,
+            plot_origin_distribution=args.plot_origin_distribution,
+            plot_origin_distribution_abs=args.plot_origin_distribution_abs,
+            plot_creation_dist_key=args.plot_creation_dist,
             plot_all_dashboards=plot_all,
             timestamp=timestamp,
             title_prefix=title_prefix,
@@ -123,7 +157,10 @@ def main() -> None:
         )
     
     if args.save_dashboard_data:
-        export_dashboard_dataCPU3(merged_stats, final_summary, timestamp, experiment_config, optimal_avg_steps, title_prefix=title_prefix)
+        if isinstance(last_env, EnvironmentGPU4):
+            export_dashboard_dataGPU4(merged_stats, final_summary, timestamp, experiment_config, optimal_avg_steps, title_prefix=title_prefix)
+        else:
+            export_dashboard_dataCPU3(merged_stats, final_summary, timestamp, experiment_config, optimal_avg_steps, title_prefix=title_prefix)
 
 if __name__ == "__main__":
     main()
