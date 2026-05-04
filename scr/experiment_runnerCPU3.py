@@ -103,6 +103,28 @@ def _run_single_experimentCPU3(worker_input: WorkerInputCPU3) -> Dict[str, Any]:
     }
     origin_perc_cache = {key: 0.0 for key in CREATION_KEYS_CPU3}
     origin_abs_cache = {key: 0.0 for key in CREATION_KEYS_CPU3}
+
+    # Seed caches from the current agent state so phase boundaries do not
+    # restart dashboard metric series from artificial zeros before the first
+    # scheduled metric refresh of the new phase.
+    perf = calculate_metricsCPU3(agent, metric_context)
+    metric_cache = {
+        "micro": perf[0],
+        "rmicro": perf[1],
+        "macro": perf[2],
+        "rmacro": perf[3],
+        "know": perf[4],
+        "avg_r": perf[5],
+        "avg_rel_r": perf[6],
+        "avg_q_all": perf[7],
+        "avg_q_rel": perf[8],
+        "avg_fit_all": perf[9],
+        "avg_fit_rel": perf[10],
+        "generalization": perf[11],
+    }
+    origin_perc, origin_counts = calculate_origin_distributionCPU3(agent)
+    origin_perc_cache = {origin: origin_perc.get(origin, 0.0) for origin in CREATION_KEYS_CPU3}
+    origin_abs_cache = {origin: origin_counts.get(origin, 0.0) for origin in CREATION_KEYS_CPU3}
     
     curr_ep_idx = 0
     start_time = time.time()
@@ -246,7 +268,7 @@ def run_experimentCPU3(
         for origin in CREATION_KEYS_CPU3:
             stats[f"stats_{origin}_creation_dist"][i, :, :] = res["creation_perc"][origin]
             stats[f"stats_{origin}_creation_dist_abs"][i, :, :] = res["creation_abs"][origin]
-        exploit_slice = res["stats"]["steps"][idx_p2_start:]
+        exploit_slice = res["stats"]["steps"][idx_p3_start:]
         if exploit_slice.size == 0:
             score = float(np.mean(res["stats"]["steps"])) if res["stats"]["steps"].size > 0 else float("inf")
         else:

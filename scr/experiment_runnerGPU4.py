@@ -99,6 +99,41 @@ def run_experimentGPU4(
     origin_perc_cache = torch.zeros((experiment_config.n_exp, len(agent.origin_map)), device=environment.device)
     origin_abs_cache = torch.zeros((experiment_config.n_exp, len(agent.origin_map)), device=environment.device)
     metric_cache = tuple(torch.zeros(experiment_config.n_exp, device=environment.device) for _ in range(12))
+
+    # Seed caches from the current agent/environment state so phase boundaries
+    # do not begin with artificial zero stretches before the first scheduled
+    # metric refresh.
+    (
+        metric_cache_know,
+        metric_cache_generalization,
+        metric_cache_micro,
+        metric_cache_macro,
+        metric_cache_rmicro,
+        metric_cache_rmacro,
+        metric_cache_avg_r,
+        metric_cache_avg_rel_r,
+        metric_cache_avg_q_all,
+        metric_cache_avg_q_rel,
+        metric_cache_avg_fit_all,
+        metric_cache_avg_fit_rel,
+        origin_perc_cache,
+        origin_abs_cache,
+    ) = calculate_metricsGPU4(agent, metric_context)
+    metric_cache = (
+        metric_cache_know,
+        metric_cache_generalization,
+        metric_cache_micro,
+        metric_cache_macro,
+        metric_cache_rmicro,
+        metric_cache_rmacro,
+        metric_cache_avg_r,
+        metric_cache_avg_rel_r,
+        metric_cache_avg_q_all,
+        metric_cache_avg_q_rel,
+        metric_cache_avg_fit_all,
+        metric_cache_avg_fit_rel,
+    )
+
     timing_breakdown = {
         "reset_step_s": 0.0,
         "run_step_s": 0.0,
@@ -240,7 +275,7 @@ def run_experimentGPU4(
     timing_breakdown["transfer_to_numpy_s"] += time.perf_counter() - transfer_start
     stats_np["all_agents"] = agent
 
-    exploit_slice = stats_gpu["stats_steps"][:, idx_p2_start:curr_ep_idx]
+    exploit_slice = stats_gpu["stats_steps"][:, idx_p3_start:curr_ep_idx]
     if exploit_slice.numel() == 0:
         per_exp_mean_steps = torch.mean(stats_gpu["stats_steps"][:, :curr_ep_idx], dim=1)
     else:

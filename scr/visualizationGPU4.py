@@ -43,15 +43,35 @@ def _action_fitness_mapGPU4(best_agent: AgentSelectionGPU4, states: torch.Tensor
     return best_agent.agent.action_fitness_for_states(best_agent.experiment_index, states)
 
 
-def calculate_policy_avg_lenGPU4(best_agent: Optional[AgentSelectionGPU4], environment: EnvironmentGPU4) -> float:
+def _format_policy_avgGPU4(value: Optional[float]) -> str:
+    return f"{value:.2f}" if value is not None else "N/A"
+
+
+def _align_best_agent_deviceGPU4(best_agent: Optional[AgentSelectionGPU4], device: torch.device) -> Optional[AgentSelectionGPU4]:
+    if best_agent is None:
+        return None
+    agent = best_agent.agent
+    target_device = torch.device(device)
+    if getattr(agent, "device", None) == target_device:
+        return best_agent
+    for attr_name, attr_value in vars(agent).items():
+        if isinstance(attr_value, torch.Tensor):
+            setattr(agent, attr_name, attr_value.to(target_device))
+    agent.device = target_device
+    return AgentSelectionGPU4(agent, best_agent.experiment_index)
+
+
+def calculate_policy_avg_lenGPU4(best_agent: Optional[AgentSelectionGPU4], environment: EnvironmentGPU4, max_steps: int = 50) -> Optional[float]:
     if best_agent is None or not isinstance(environment, GridEnvironmentGPU4):
-        return 0.0
+        return None
     valid_states = environment.valid_coords
-    solved_steps = []
+    total_steps = 0.0
+    total_cases = int(valid_states.shape[0])
     for start_idx in range(valid_states.shape[0]):
         current = valid_states[start_idx : start_idx + 1].clone()
         visited = set()
-        for step in range(1, 51):
+        solved = False
+        for step in range(1, max_steps + 1):
             key = tuple(current[0].tolist())
             if key in visited:
                 break
@@ -62,9 +82,12 @@ def calculate_policy_avg_lenGPU4(best_agent: Optional[AgentSelectionGPU4], envir
             best_action = int(torch.argmax(action_fitness[0]).item())
             current = environment.peek_step(current, torch.tensor([best_action], device=environment.device))
             if torch.all(current[0] == environment.goal_pos):
-                solved_steps.append(step)
+                total_steps += step
+                solved = True
                 break
-    return float(np.mean(solved_steps)) if solved_steps else 0.0
+        if not solved:
+            total_steps += max_steps
+    return float(total_steps / total_cases) if total_cases > 0 else None
 
 
 def calculate_exploit_avg_stdGPU4(stats: Dict[str, Any], params_phases: Dict[str, Any]) -> float:
@@ -135,8 +158,8 @@ def _plot_reward_qualityGPU4(ax, mean_avg_r, mean_avg_rel_r, mean_avg_q_all, mea
     ax.grid(True, alpha=0.3)
 
 
-def _plot_policy_mapGPU4(fig, ax, best_agent: AgentSelectionGPU4, environment: GridEnvironmentGPU4, policy_avg_steps: float, title_prefix=""):
-    ax.set_title(f"{title_prefix}Policy Map | Avg Steps: {policy_avg_steps:.2f}")
+def _plot_policy_mapGPU4(fig, ax, best_agent: AgentSelectionGPU4, environment: GridEnvironmentGPU4, policy_avg_steps: Optional[float], title_prefix=""):
+    ax.set_title(f"{title_prefix}Policy Map | Greedy Avg Steps (all starts): {_format_policy_avgGPU4(policy_avg_steps)}")
     ax.set_xlim(0, environment.cols)
     ax.set_ylim(environment.rows, 0)
     ax.set_aspect("equal")
@@ -312,36 +335,54 @@ def plot_grouped_bar_chartGPU4(ax, stats: Dict[str, Any], origin_key: str, title
     return handles, labels
 
 
-def create_dashboardGPU4(best_agent: Optional[AgentSelectionGPU4], optimal_avg_steps: float, environment: EnvironmentGPU4, stats: Dict[str, Any], params_phases: Dict[str, Any], n_exp: int, n_steps: int, summary_stats: Dict[str, Any], plot_all_dashboards: bool = True, timestamp: Optional[str] = None, title_prefix: str = ""):
+def create_dashboardGPU4(best_agent: Optional[AgentSelectionGPU4], optimal_avg_steps: float, environment: EnvironmentGPU4, stats: Dict[str, Any], params_phases: Dict[str, Any], n_exp: int, n_steps: int, summary_stats: Dict[str, Any], plot_steps: bool = True, plot_population: bool = True, plot_knowledge: bool = True, plot_reward_quality: bool = True, plot_policy_map: bool = True, plot_top_rules: bool = True, plot_origin_distribution: bool = True, plot_origin_distribution_abs: bool = False, plot_creation_dist_key: Optional[str] = None, plot_all_dashboards: bool = False, timestamp: Optional[str] = None, title_prefix: str = ""):
     fig = plt.figure(figsize=(20, 24))
     fig.suptitle(f"{title_prefix}ACS2 Dashboard: Final Report", fontsize=16, fontweight="bold")
     gs = GridSpec(10, 4, figure=fig, height_ratios=[1, 1, 1, 1, 1, 1, 1, 1, 1, 0.8])
     boundary_one = params_phases["explore"]["episodes"]
     boundary_two = boundary_one + params_phases["exploit1"]["episodes"]
-    mean_steps = stats.get("mean_steps", np.array([])).flatten()
-    _plot_stepsGPU4(fig.add_subplot(gs[0, 0]), mean_steps, calculate_emaGPU4(mean_steps, 50), optimal_avg_steps, summary_stats.get("Exploit Avg. Steps", summary_stats.get("Last Avg. Steps", 0)), boundary_one, boundary_two, 50, title_prefix)
-    _plot_populationGPU4(fig.add_subplot(gs[0, 1]), stats.get("mean_micro_pop", np.array([])).flatten(), stats.get("mean_rel_micro_pop", np.array([])).flatten(), stats.get("mean_macro_pop", np.array([])).flatten(), stats.get("mean_rel_macro_pop", np.array([])).flatten(), boundary_one, boundary_two, title_prefix)
-    _plot_knowledgeGPU4(fig.add_subplot(gs[0, 2]), stats.get("mean_know", np.array([])).flatten(), stats.get("std_know", np.array([])).flatten(), stats.get("mean_generalization", np.array([])).flatten(), boundary_one, boundary_two, title_prefix, environment.supports_metric_evaluation)
-    _plot_reward_qualityGPU4(fig.add_subplot(gs[0, 3]), stats.get("mean_avg_r", np.array([])).flatten(), stats.get("mean_avg_rel_r", np.array([])).flatten(), stats.get("mean_avg_q_all", np.array([])).flatten(), stats.get("mean_avg_q_rel", np.array([])).flatten(), boundary_one, boundary_two, title_prefix)
-    if best_agent is not None and environment.supports_policy_map:
+    plot_names: List[str] = []
+    if plot_all_dashboards or plot_steps:
+        mean_steps = stats.get("mean_steps", np.array([])).flatten()
+        _plot_stepsGPU4(fig.add_subplot(gs[0, 0]), mean_steps, calculate_emaGPU4(mean_steps, 50), optimal_avg_steps, summary_stats.get("Exploit Avg. Steps", summary_stats.get("Last Avg. Steps", 0)), boundary_one, boundary_two, 50, title_prefix)
+        plot_names.append("steps")
+    if plot_all_dashboards or plot_population:
+        _plot_populationGPU4(fig.add_subplot(gs[0, 1]), stats.get("mean_micro_pop", np.array([])).flatten(), stats.get("mean_rel_micro_pop", np.array([])).flatten(), stats.get("mean_macro_pop", np.array([])).flatten(), stats.get("mean_rel_macro_pop", np.array([])).flatten(), boundary_one, boundary_two, title_prefix)
+        plot_names.append("population")
+    if plot_all_dashboards or plot_knowledge:
+        _plot_knowledgeGPU4(fig.add_subplot(gs[0, 2]), stats.get("mean_know", np.array([])).flatten(), stats.get("std_know", np.array([])).flatten(), stats.get("mean_generalization", np.array([])).flatten(), boundary_one, boundary_two, title_prefix, environment.supports_metric_evaluation)
+        plot_names.append("knowledge")
+    if plot_all_dashboards or plot_reward_quality:
+        _plot_reward_qualityGPU4(fig.add_subplot(gs[0, 3]), stats.get("mean_avg_r", np.array([])).flatten(), stats.get("mean_avg_rel_r", np.array([])).flatten(), stats.get("mean_avg_q_all", np.array([])).flatten(), stats.get("mean_avg_q_rel", np.array([])).flatten(), boundary_one, boundary_two, title_prefix)
+        plot_names.append("reward_quality")
+    if (plot_all_dashboards or plot_policy_map) and best_agent is not None and environment.supports_policy_map:
         _plot_policy_mapGPU4(fig, fig.add_subplot(gs[1, 0:2]), best_agent, environment, calculate_policy_avg_lenGPU4(best_agent, environment), title_prefix)
-        _plot_top_rulesGPU4(fig.add_subplot(gs[1, 2:4]), best_agent, title_prefix)
-    else:
-        _plot_top_rulesGPU4(fig.add_subplot(gs[1, :]), best_agent, title_prefix)
-    _plot_origin_distributionGPU4(fig.add_subplot(gs[2, 0:2]), stats, boundary_one, boundary_two, True, title_prefix)
-    _plot_origin_distribution_absGPU4(fig.add_subplot(gs[2, 2:4]), stats, boundary_one, boundary_two, True, title_prefix)
+        plot_names.append("policy_map")
+    if plot_all_dashboards or plot_top_rules:
+        top_rules_slot = gs[1, 2:4] if best_agent is not None and environment.supports_policy_map else gs[1, :]
+        _plot_top_rulesGPU4(fig.add_subplot(top_rules_slot), best_agent, title_prefix)
+        plot_names.append("top_rules")
+    if plot_all_dashboards or plot_origin_distribution:
+        _plot_origin_distributionGPU4(fig.add_subplot(gs[2, 0:2]), stats, boundary_one, boundary_two, True, title_prefix)
+        plot_names.append("origin_distribution")
+    if plot_all_dashboards or plot_origin_distribution_abs:
+        _plot_origin_distribution_absGPU4(fig.add_subplot(gs[2, 2:4]), stats, boundary_one, boundary_two, True, title_prefix)
+        plot_names.append("origin_distribution_abs")
 
     grouped_handles: List[Any] = []
     grouped_labels: List[str] = []
-    for idx, key in enumerate(CREATION_KEYS_GPU4):
-        ax = fig.add_subplot(gs[3 + idx, :])
-        handles, labels = plot_grouped_bar_chartGPU4(ax, stats, key, f"{key.upper()} Creation Distribution", params_phases, True, title_prefix)
-        if not grouped_handles and handles:
-            grouped_handles = handles
-            grouped_labels = labels
-        if idx < len(CREATION_KEYS_GPU4) - 1:
-            plt.setp(ax.get_xticklabels(), visible=False)
-    if grouped_handles:
+    if plot_all_dashboards or plot_creation_dist_key in CREATION_KEYS_GPU4:
+        for idx, key in enumerate(CREATION_KEYS_GPU4):
+            if plot_all_dashboards or key == plot_creation_dist_key:
+                ax = fig.add_subplot(gs[3 + idx, :])
+                handles, labels = plot_grouped_bar_chartGPU4(ax, stats, key, f"{key.upper()} Creation Distribution", params_phases, plot_all_dashboards, title_prefix)
+                if not grouped_handles and handles:
+                    grouped_handles = handles
+                    grouped_labels = labels
+                if not plot_all_dashboards or idx < len(CREATION_KEYS_GPU4) - 1:
+                    plt.setp(ax.get_xticklabels(), visible=False)
+                plot_names.append(f"creation_dist_{key}")
+    if plot_all_dashboards and grouped_handles:
         legend_ax = fig.add_subplot(gs[8, :])
         legend_ax.legend(grouped_handles, grouped_labels, title="Creation Interval", ncol=5, loc="center")
         legend_ax.axis("off")
@@ -350,7 +391,7 @@ def create_dashboardGPU4(best_agent: Optional[AgentSelectionGPU4], optimal_avg_s
     report_ax.axis("off")
     cfg = best_agent.agent.cfg if best_agent is not None else None
     exploit_avg_std = calculate_exploit_avg_stdGPU4(stats, params_phases)
-    best_policy = calculate_policy_avg_lenGPU4(best_agent, environment) if best_agent is not None and environment.supports_policy_map else 0.0
+    best_policy = calculate_policy_avg_lenGPU4(best_agent, environment) if best_agent is not None and environment.supports_policy_map else None
     knowledge_text = f"{summary_stats.get('Knowledge', 0) * 100:.2f}%" if environment.supports_metric_evaluation else "N/A (unsupported)"
     lines = [
         "--- PARAMETER & RESULT SUMMARY ---",
@@ -371,7 +412,7 @@ def create_dashboardGPU4(best_agent: Optional[AgentSelectionGPU4], optimal_avg_s
     lines.extend([
         "-" * 110,
         "[RESULTS - AVERAGES FROM EXPLOIT2]",
-        f" >> Steps (Exploit Avg.): {summary_stats.get('Exploit Avg. Steps', summary_stats.get('Last Avg. Steps', 0)):.2f} +/- {exploit_avg_std:.2f} vs Optimal: {optimal_avg_steps:.2f} vs Best Policy: {best_policy:.2f}",
+        f" >> Steps (Exploit Avg.): {summary_stats.get('Exploit Avg. Steps', summary_stats.get('Last Avg. Steps', 0)):.2f} +/- {exploit_avg_std:.2f} vs Optimal: {optimal_avg_steps:.2f} vs Greedy Policy (all starts, unsolved=n_steps): {_format_policy_avgGPU4(best_policy)}",
         f" >> Knowledge: {knowledge_text} | Generalization: {summary_stats.get('Generalization', 0) * 100:.2f}%",
         f" >> Avg Reward (All): {summary_stats.get('Rew (All)', 0):.2f} | Avg Reward (Rel): {summary_stats.get('Rew (Rel)', 0):.2f}",
         f" >> Population Micro: {summary_stats.get('Micro', 0):.1f} (Rel: {summary_stats.get('Micro (Rel)', 0):.1f}) | Macro: {summary_stats.get('Macro', 0):.1f} (Rel: {summary_stats.get('Macro (Rel)', 0):.1f})",
@@ -379,11 +420,54 @@ def create_dashboardGPU4(best_agent: Optional[AgentSelectionGPU4], optimal_avg_s
     report_ax.text(0.01, 1.0, "\n".join(lines), transform=report_ax.transAxes, fontsize=9, fontfamily="monospace", va="top")
 
     plt.tight_layout(rect=[0, 0, 0.9, 0.96])
+    plot_suffix = "all" if plot_all_dashboards else "_".join(plot_names) if plot_names else "unspecified"
     timestamp = timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
-    plt.savefig(f"./reports/acs2_project_dashboard_{timestamp}_all.png")
+    plt.savefig(f"./reports/acs2_project_dashboard_{timestamp}_{plot_suffix}.png")
     plt.close("all")
 
 
-def create_loaded_dashboardGPU4(loaded_stats: Dict[str, Any], optimal_avg_steps: float, params_phases: Dict[str, Any], n_exp: int, n_steps: int, environment_metadata: Dict[str, Any], timestamp: Optional[str] = None, title_prefix: str = ""):
+def create_loaded_dashboardGPU4(loaded_stats: Dict[str, Any], optimal_avg_steps: float, params_phases: Dict[str, Any], n_exp: int, n_steps: int, environment_metadata: Dict[str, Any], plot_steps: bool = False, plot_population: bool = False, plot_knowledge: bool = False, plot_reward_quality: bool = False, plot_policy_map: bool = False, plot_top_rules: bool = False, plot_origin_distribution: bool = False, plot_origin_distribution_abs: bool = False, plot_creation_dist_key: Optional[str] = None, plot_all_dashboards: bool = False, timestamp: Optional[str] = None, title_prefix: str = ""):
     environment = environment_from_metadataGPU4(environment_metadata, n_exp=1, device="cpu")
-    create_dashboardGPU4(None, optimal_avg_steps, environment, loaded_stats, params_phases, n_exp, n_steps, loaded_stats, timestamp=timestamp, title_prefix=title_prefix)
+    best_agent = _align_best_agent_deviceGPU4(loaded_stats.get("best_agent"), environment.device)
+    active_plot_count = sum([plot_steps, plot_population, plot_knowledge, plot_reward_quality, plot_policy_map, plot_top_rules, plot_origin_distribution, plot_origin_distribution_abs, plot_creation_dist_key is not None])
+    if not plot_all_dashboards and active_plot_count == 1:
+        fig = plt.figure(figsize=(12, 9))
+        ax = fig.add_subplot(111)
+        boundary_one = params_phases["explore"]["episodes"]
+        boundary_two = boundary_one + params_phases["exploit1"]["episodes"]
+        plot_name = "unspecified"
+        if plot_steps:
+            mean_steps = loaded_stats.get("mean_steps", np.array([])).flatten()
+            _plot_stepsGPU4(ax, mean_steps, calculate_emaGPU4(mean_steps, 50), optimal_avg_steps, loaded_stats.get("Exploit Avg. Steps", loaded_stats.get("Last Avg. Steps", 0)), boundary_one, boundary_two, 50, title_prefix)
+            plot_name = "steps"
+        elif plot_population:
+            _plot_populationGPU4(ax, loaded_stats.get("mean_micro_pop", np.array([])).flatten(), loaded_stats.get("mean_rel_micro_pop", np.array([])).flatten(), loaded_stats.get("mean_macro_pop", np.array([])).flatten(), loaded_stats.get("mean_rel_macro_pop", np.array([])).flatten(), boundary_one, boundary_two, title_prefix)
+            plot_name = "population"
+        elif plot_knowledge:
+            _plot_knowledgeGPU4(ax, loaded_stats.get("mean_know", np.array([])).flatten(), loaded_stats.get("std_know", np.array([])).flatten(), loaded_stats.get("mean_generalization", np.array([])).flatten(), boundary_one, boundary_two, title_prefix, environment.supports_metric_evaluation)
+            plot_name = "knowledge"
+        elif plot_reward_quality:
+            _plot_reward_qualityGPU4(ax, loaded_stats.get("mean_avg_r", np.array([])).flatten(), loaded_stats.get("mean_avg_rel_r", np.array([])).flatten(), loaded_stats.get("mean_avg_q_all", np.array([])).flatten(), loaded_stats.get("mean_avg_q_rel", np.array([])).flatten(), boundary_one, boundary_two, title_prefix)
+            plot_name = "reward_quality"
+        elif plot_policy_map and best_agent is not None and environment.supports_policy_map:
+            _plot_policy_mapGPU4(fig, ax, best_agent, environment, calculate_policy_avg_lenGPU4(best_agent, environment), title_prefix)
+            plot_name = "policy_map"
+        elif plot_top_rules:
+            _plot_top_rulesGPU4(ax, best_agent, title_prefix)
+            plot_name = "top_rules"
+        elif plot_origin_distribution:
+            _plot_origin_distributionGPU4(ax, loaded_stats, boundary_one, boundary_two, False, title_prefix)
+            plot_name = "origin_distribution"
+        elif plot_origin_distribution_abs:
+            _plot_origin_distribution_absGPU4(ax, loaded_stats, boundary_one, boundary_two, False, title_prefix)
+            plot_name = "origin_distribution_abs"
+        elif plot_creation_dist_key:
+            handles, labels = plot_grouped_bar_chartGPU4(ax, loaded_stats, plot_creation_dist_key, f"{plot_creation_dist_key.upper()} Creation Distribution", params_phases, True, title_prefix)
+            ax.legend(handles, labels, title="Creation Interval", fontsize="x-small", loc="best")
+            plot_name = f"creation_dist_{plot_creation_dist_key}"
+        plt.tight_layout()
+        timestamp = timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
+        plt.savefig(f"./reports/acs2_project_dashboard_{timestamp}_{plot_name}.png")
+        plt.close("all")
+        return
+    create_dashboardGPU4(best_agent, optimal_avg_steps, environment, loaded_stats, params_phases, n_exp, n_steps, loaded_stats, plot_steps, plot_population, plot_knowledge, plot_reward_quality, plot_policy_map, plot_top_rules, plot_origin_distribution, plot_origin_distribution_abs, plot_creation_dist_key, plot_all_dashboards, timestamp=timestamp, title_prefix=title_prefix)

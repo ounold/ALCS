@@ -44,18 +44,24 @@ def calculate_emaCPU3(data: np.ndarray, span: int) -> np.ndarray:
     return ema
 
 
-def calculate_policy_avg_lenCPU3(agent: Optional[ACS2CPU3], env: EnvironmentCPU3) -> float:
+def _format_policy_avgCPU3(value: Optional[float]) -> str:
+    return f"{value:.2f}" if value is not None else "N/A"
+
+
+def calculate_policy_avg_lenCPU3(agent: Optional[ACS2CPU3], env: EnvironmentCPU3, max_steps: int = 50) -> Optional[float]:
     if not agent or not isinstance(env, GridEnvironmentCPU3):
-        return 0.0
+        return None
     total_steps = 0
-    solved_cases = 0
+    total_cases = 0
     for row in range(env.rows):
         for col in range(env.cols):
             if (row, col) == env.goal_pos or (row, col) in env.obstacles:
                 continue
+            total_cases += 1
             current = [row, col]
             visited = set()
-            for steps in range(1, 51):
+            solved = False
+            for steps in range(1, max_steps + 1):
                 current_tuple = tuple(current)
                 if current_tuple in visited:
                     break
@@ -71,9 +77,11 @@ def calculate_policy_avg_lenCPU3(agent: Optional[ACS2CPU3], env: EnvironmentCPU3
                 current = [int(value) for value in env.peek_step(current, best_action)]
                 if tuple(current) == env.goal_pos:
                     total_steps += steps
-                    solved_cases += 1
+                    solved = True
                     break
-    return total_steps / solved_cases if solved_cases > 0 else 0.0
+            if not solved:
+                total_steps += max_steps
+    return (total_steps / total_cases) if total_cases > 0 else None
 
 
 def calculate_exploit_avg_stdCPU3(stats: Dict[str, Any], params_phases: Dict[str, Any]) -> float:
@@ -148,8 +156,8 @@ def _plot_reward_qualityCPU3(ax, mean_avg_r, mean_avg_rel_r, mean_avg_q_all, mea
     ax.grid(True, alpha=0.3)
 
 
-def _plot_policy_mapCPU3(fig, ax, best_agent: ACS2CPU3, env: GridEnvironmentCPU3, policy_avg_steps: float, title_prefix=""):
-    ax.set_title(f"{title_prefix}Policy Map | Avg Steps: {policy_avg_steps:.2f}")
+def _plot_policy_mapCPU3(fig, ax, best_agent: ACS2CPU3, env: GridEnvironmentCPU3, policy_avg_steps: Optional[float], title_prefix=""):
+    ax.set_title(f"{title_prefix}Policy Map | Greedy Avg Steps (all starts): {_format_policy_avgCPU3(policy_avg_steps)}")
     ax.set_xlim(0, env.cols)
     ax.set_ylim(env.rows, 0)
     ax.set_aspect("equal")
@@ -382,7 +390,7 @@ def create_dashboardCPU3(best_agent: Optional[ACS2CPU3], optimal_avg_steps: floa
     report_ax.axis("off")
     if best_agent and env:
         exploit_avg_std = calculate_exploit_avg_stdCPU3(stats, params_phases)
-        best_policy = calculate_policy_avg_lenCPU3(best_agent, env) if env.supports_policy_map else 0.0
+        best_policy = calculate_policy_avg_lenCPU3(best_agent, env) if env.supports_policy_map else None
         knowledge_text = f"{summary_stats.get('Knowledge', 0) * 100:.2f}%" if env.supports_metric_evaluation else "N/A (unsupported)"
         lines = [
             "--- PARAMETER & RESULT SUMMARY ---",
@@ -404,7 +412,7 @@ def create_dashboardCPU3(best_agent: Optional[ACS2CPU3], optimal_avg_steps: floa
         lines.extend([
             "-" * 110,
             "[RESULTS - AVERAGES FROM EXPLOIT2]",
-            f" >> Steps (Exploit Avg.): {summary_stats.get('Exploit Avg. Steps', summary_stats.get('Last Avg. Steps', 0)):.2f} +/- {exploit_avg_std:.2f} vs Optimal: {optimal_avg_steps:.2f} vs Best Policy: {best_policy:.2f}",
+            f" >> Steps (Exploit Avg.): {summary_stats.get('Exploit Avg. Steps', summary_stats.get('Last Avg. Steps', 0)):.2f} +/- {exploit_avg_std:.2f} vs Optimal: {optimal_avg_steps:.2f} vs Greedy Policy (all starts, unsolved=n_steps): {_format_policy_avgCPU3(best_policy)}",
             f" >> Knowledge: {knowledge_text} | Generalization: {summary_stats.get('Generalization', 0) * 100:.2f}%",
             f" >> Avg Reward (All): {summary_stats.get('Rew (All)', 0):.2f} | Avg Reward (Rel): {summary_stats.get('Rew (Rel)', 0):.2f}",
             f" >> Population Micro: {summary_stats.get('Micro', 0):.1f} (Rel: {summary_stats.get('Micro (Rel)', 0):.1f}) | Macro: {summary_stats.get('Macro', 0):.1f} (Rel: {summary_stats.get('Macro (Rel)', 0):.1f})",
