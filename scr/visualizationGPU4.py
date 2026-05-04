@@ -356,7 +356,7 @@ def create_dashboardGPU4(best_agent: Optional[AgentSelectionGPU4], optimal_avg_s
         _plot_reward_qualityGPU4(fig.add_subplot(gs[0, 3]), stats.get("mean_avg_r", np.array([])).flatten(), stats.get("mean_avg_rel_r", np.array([])).flatten(), stats.get("mean_avg_q_all", np.array([])).flatten(), stats.get("mean_avg_q_rel", np.array([])).flatten(), boundary_one, boundary_two, title_prefix)
         plot_names.append("reward_quality")
     if (plot_all_dashboards or plot_policy_map) and best_agent is not None and environment.supports_policy_map:
-        _plot_policy_mapGPU4(fig, fig.add_subplot(gs[1, 0:2]), best_agent, environment, calculate_policy_avg_lenGPU4(best_agent, environment), title_prefix)
+        _plot_policy_mapGPU4(fig, fig.add_subplot(gs[1, 0:2]), best_agent, environment, calculate_policy_avg_lenGPU4(best_agent, environment, max_steps=n_steps), title_prefix)
         plot_names.append("policy_map")
     if plot_all_dashboards or plot_top_rules:
         top_rules_slot = gs[1, 2:4] if best_agent is not None and environment.supports_policy_map else gs[1, :]
@@ -391,7 +391,7 @@ def create_dashboardGPU4(best_agent: Optional[AgentSelectionGPU4], optimal_avg_s
     report_ax.axis("off")
     cfg = best_agent.agent.cfg if best_agent is not None else None
     exploit_avg_std = calculate_exploit_avg_stdGPU4(stats, params_phases)
-    best_policy = calculate_policy_avg_lenGPU4(best_agent, environment) if best_agent is not None and environment.supports_policy_map else None
+    best_policy = calculate_policy_avg_lenGPU4(best_agent, environment, max_steps=n_steps) if best_agent is not None and environment.supports_policy_map else None
     knowledge_text = f"{summary_stats.get('Knowledge', 0) * 100:.2f}%" if environment.supports_metric_evaluation else "N/A (unsupported)"
     lines = [
         "--- PARAMETER & RESULT SUMMARY ---",
@@ -450,7 +450,7 @@ def create_loaded_dashboardGPU4(loaded_stats: Dict[str, Any], optimal_avg_steps:
             _plot_reward_qualityGPU4(ax, loaded_stats.get("mean_avg_r", np.array([])).flatten(), loaded_stats.get("mean_avg_rel_r", np.array([])).flatten(), loaded_stats.get("mean_avg_q_all", np.array([])).flatten(), loaded_stats.get("mean_avg_q_rel", np.array([])).flatten(), boundary_one, boundary_two, title_prefix)
             plot_name = "reward_quality"
         elif plot_policy_map and best_agent is not None and environment.supports_policy_map:
-            _plot_policy_mapGPU4(fig, ax, best_agent, environment, calculate_policy_avg_lenGPU4(best_agent, environment), title_prefix)
+            _plot_policy_mapGPU4(fig, ax, best_agent, environment, calculate_policy_avg_lenGPU4(best_agent, environment, max_steps=n_steps), title_prefix)
             plot_name = "policy_map"
         elif plot_top_rules:
             _plot_top_rulesGPU4(ax, best_agent, title_prefix)

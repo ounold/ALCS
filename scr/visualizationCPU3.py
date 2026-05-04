@@ -319,7 +319,7 @@ def create_loaded_dashboardCPU3(loaded_stats: Dict[str, Any], optimal_avg_steps:
             _plot_reward_qualityCPU3(ax, loaded_stats.get("mean_avg_r", np.array([])).flatten(), loaded_stats.get("mean_avg_rel_r", np.array([])).flatten(), loaded_stats.get("mean_avg_q_all", np.array([])).flatten(), loaded_stats.get("mean_avg_q_rel", np.array([])).flatten(), boundary_one, boundary_two, title_prefix)
             plot_name = "reward_quality"
         elif plot_policy_map and best_agent and env.supports_policy_map:
-            _plot_policy_mapCPU3(fig, ax, best_agent, env, calculate_policy_avg_lenCPU3(best_agent, env), title_prefix)
+            _plot_policy_mapCPU3(fig, ax, best_agent, env, calculate_policy_avg_lenCPU3(best_agent, env, max_steps=n_steps), title_prefix)
             plot_name = "policy_map"
         elif plot_top_rules and best_agent:
             _plot_top_rulesCPU3(ax, best_agent, title_prefix)
@@ -359,7 +359,7 @@ def create_dashboardCPU3(best_agent: Optional[ACS2CPU3], optimal_avg_steps: floa
     if plot_all_dashboards or plot_reward_quality:
         _plot_reward_qualityCPU3(fig.add_subplot(gs[0, 3]), stats.get("mean_avg_r", np.array([])).flatten(), stats.get("mean_avg_rel_r", np.array([])).flatten(), stats.get("mean_avg_q_all", np.array([])).flatten(), stats.get("mean_avg_q_rel", np.array([])).flatten(), boundary_one, boundary_two, title_prefix)
     if (plot_all_dashboards or plot_policy_map) and best_agent and env and env.supports_policy_map:
-        _plot_policy_mapCPU3(fig, fig.add_subplot(gs[1, 0:2]), best_agent, env, calculate_policy_avg_lenCPU3(best_agent, env), title_prefix)
+        _plot_policy_mapCPU3(fig, fig.add_subplot(gs[1, 0:2]), best_agent, env, calculate_policy_avg_lenCPU3(best_agent, env, max_steps=n_steps), title_prefix)
     if (plot_all_dashboards or plot_top_rules) and best_agent:
         top_rules_slot = gs[1, 2:4] if env and env.supports_policy_map else gs[1, :]
         _plot_top_rulesCPU3(fig.add_subplot(top_rules_slot), best_agent, title_prefix)
@@ -390,7 +390,7 @@ def create_dashboardCPU3(best_agent: Optional[ACS2CPU3], optimal_avg_steps: floa
     report_ax.axis("off")
     if best_agent and env:
         exploit_avg_std = calculate_exploit_avg_stdCPU3(stats, params_phases)
-        best_policy = calculate_policy_avg_lenCPU3(best_agent, env) if env.supports_policy_map else None
+        best_policy = calculate_policy_avg_lenCPU3(best_agent, env, max_steps=n_steps) if env.supports_policy_map else None
         knowledge_text = f"{summary_stats.get('Knowledge', 0) * 100:.2f}%" if env.supports_metric_evaluation else "N/A (unsupported)"
         lines = [
             "--- PARAMETER & RESULT SUMMARY ---",
